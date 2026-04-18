@@ -10,8 +10,8 @@
   --border:    #e8e3dc;
   --border2:   #d4cdc4;
   --text:      #1a1714;
-  --muted:     #6b655e;
-  --hint:      #a89f96;
+  --muted:     #8f3e13;
+  --hint:      #b5541e;
   --accent:    #b5541e;
   --accent2:   #8f3e13;
   --blue:      #2e7ab5;
@@ -29,7 +29,7 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.6;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -569,3 +569,49 @@ pre {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+
+/* ── Onboarding Guide ── */
+.info-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  color: var(--hint);
+  font-size: 10px;
+  cursor: pointer;
+  margin-left: 6px;
+  transition: all 0.2s;
+  vertical-align: middle;
+}
+
+.info-trigger:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.guide-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 23, 20, 0.6);
+  backdrop-filter: blur(4px);
+  display: none; 
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.guide-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  padding: 2.5rem;
+  max-width: 420px;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 30px 60px rgba(0,0,0,0.12);
+  text-align: left;
+}

@@ -1,4 +1,4 @@
-const API = 'http://localhost:8000';
+const API = window.location.origin;
 let chartInstance = null;
 
 // ── Main pipeline runner ──
@@ -271,3 +271,37 @@ function showToast(msg) {
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 4000);
 }
+
+// ── Onboarding Guide Logic ──
+const guides = {
+  raw: {
+    title: "01 / The Raw Requirement",
+    text: "Enter your prompt idea in plain English. For example: 'A travel agent that suggests hidden gems in Europe.' The Analyst agent will structure this into a professional prompt for you."
+  },
+  sample: {
+    title: "02 / The Sample Message",
+    text: "Provide an example of what a user would say to your AI. This is used to test the final optimized prompt so you can see the 'Executor' output immediately."
+  }
+};
+
+function toggleGuide(type) {
+  const overlay = document.getElementById('guideOverlay');
+  const title = document.getElementById('guideTitle');
+  const text = document.getElementById('guideText');
+
+  if (type && guides[type]) {
+    title.textContent = guides[type].title;
+    text.textContent = guides[type].text;
+    overlay.style.display = 'flex';
+  } else {
+    overlay.style.display = 'none';
+  }
+}
+
+// Show guide on first visit
+window.addEventListener('DOMContentLoaded', () => {
+  if (!localStorage.getItem('apo_onboarded')) {
+    setTimeout(() => toggleGuide('raw'), 1000); // 1 second delay for effect
+    localStorage.setItem('apo_onboarded', 'true');
+  }
+});

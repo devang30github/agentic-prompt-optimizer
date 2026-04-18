@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: apo-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: openai/gpt-oss-20b
+      - key: MAX_ROUNDS
+        value: 5
+      - key: SCORE_THRESHOLD
+        value: 8.5
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DEBUG
+        value: false
