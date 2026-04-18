@@ -1,0 +1,6 @@
+openai
+agentscope
+fastapi
+uvicorn
+python-dotenv
+pydantic

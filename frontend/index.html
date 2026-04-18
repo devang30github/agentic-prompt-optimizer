@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>APO — Agentic Prompt Optimizer</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-bracket">[</span>APO<span class="logo-bracket">]</span>
+        <span class="logo-sub">Agentic Prompt Optimizer</span>
+      </div>
+      <div class="status-pill" id="statusPill">idle</div>
+    </div>
+  </header>
+
+  <!-- Main layout -->
+  <main>
+
+    <!-- LEFT: Input panel -->
+    <section class="panel panel-input">
+      <div class="panel-label">01 / input</div>
+
+      <div class="field-group">
+        <label for="rawInput">Raw requirement</label>
+        <textarea
+          id="rawInput"
+          placeholder="Describe what you need in plain English. No structure required — the Analyst Agent will parse it..."
+          rows="7"
+        ></textarea>
+      </div>
+
+      <div class="field-group">
+        <label for="sampleInput">Sample user message <span class="label-hint">(for executor test)</span></label>
+        <textarea
+          id="sampleInput"
+          placeholder="e.g. Hi, my order hasn't arrived yet and I'm really frustrated!"
+          rows="3"
+        ></textarea>
+      </div>
+
+      <button id="runBtn" onclick="runPipeline()">
+        <span id="btnText">Run pipeline</span>
+        <span class="btn-arrow">→</span>
+      </button>
+
+      <!-- Pipeline stages tracker -->
+      <div class="stages" id="stages">
+        <div class="stage" id="stageAnalyst">
+          <div class="stage-dot"></div>
+          <div class="stage-info">
+            <span class="stage-name">Analyst</span>
+            <span class="stage-desc">Parsing requirement</span>
+          </div>
+        </div>
+        <div class="stage-connector"></div>
+        <div class="stage" id="stageHub">
+          <div class="stage-dot"></div>
+          <div class="stage-info">
+            <span class="stage-name">Architect ↔ Critic</span>
+            <span class="stage-desc">Iterative refinement</span>
+          </div>
+        </div>
+        <div class="stage-connector"></div>
+        <div class="stage" id="stageExecutor">
+          <div class="stage-dot"></div>
+          <div class="stage-info">
+            <span class="stage-name">Executor</span>
+            <span class="stage-desc">Testing final prompt</span>
+          </div>
+        </div>
+        <div class="stage-connector"></div>
+        <div class="stage" id="stageScorer">
+          <div class="stage-dot"></div>
+          <div class="stage-info">
+            <span class="stage-name">Scorer</span>
+            <span class="stage-desc">Rubric evaluation</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: Output panel -->
+    <section class="panel panel-output" id="outputPanel">
+
+      <!-- Empty state -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">_</div>
+        <p>Output will appear here after running the pipeline.</p>
+      </div>
+
+      <!-- Results (hidden until run) -->
+      <div class="results" id="results" style="display:none">
+
+        <!-- Score header -->
+        <div class="score-header">
+          <div class="score-main">
+            <span class="score-label">final score</span>
+            <span class="score-value" id="scoreValue">—</span>
+            <span class="score-denom">/10</span>
+          </div>
+          <div class="score-meta">
+            <span class="badge" id="badgePassed">PASSED</span>
+            <span class="rounds-label" id="roundsLabel">— rounds</span>
+          </div>
+        </div>
+
+        <!-- Score chart -->
+        <div class="chart-wrap">
+          <div class="panel-label">score progression</div>
+          <canvas id="scoreChart"></canvas>
+        </div>
+
+        <!-- Scorecard -->
+        <div class="scorecard" id="scorecard">
+          <div class="panel-label">scorecard</div>
+          <div class="scorecard-grid" id="scorecardGrid"></div>
+          <p class="scorecard-summary" id="scorecardSummary"></p>
+        </div>
+
+        <!-- Final prompt -->
+        <div class="output-block">
+          <div class="output-block-header">
+            <span class="panel-label">final prompt</span>
+            <button class="copy-btn" onclick="copyPrompt()">copy</button>
+          </div>
+          <pre id="finalPrompt"></pre>
+        </div>
+
+        <!-- Executor output -->
+        <div class="output-block">
+          <div class="panel-label">executor output</div>
+          <div class="chat-bubble" id="executorOutput"></div>
+        </div>
+
+        <!-- Iterations log -->
+        <div class="output-block">
+          <div class="panel-label">iteration log</div>
+          <div id="iterationsLog"></div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
