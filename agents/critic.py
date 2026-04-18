@@ -16,6 +16,7 @@ from services import LLMClient
 logger = logging.getLogger(__name__)
 
 SCORE_THRESHOLD = 8.5
+
 SYSTEM_PROMPT = """You are a ruthless but fair prompt engineering critic.
 Your job is to review a prompt draft against its original specification and
 score it on a scale of 0-10.
@@ -35,7 +36,6 @@ SCORE: <number between 0 and 10, one decimal place>
 FEEDBACK: <2-4 sentences of specific, actionable critique>
 VERDICT: <PASSED if score >= 8.5, else REVISE>
 """
-
 
 class CriticAgent(AgentBase):
     """

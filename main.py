@@ -22,6 +22,12 @@ from controllers.hub_manager import HubManager
 from controllers import Pipeline
 from fastapi.responses import FileResponse
 
+from fastapi.responses import StreamingResponse
+import asyncio
+import json
+from agentscope.message import Msg
+from models import OptimizationResult
+
 setup_logging()
 
 # Initialise AgentScope runtime
@@ -145,3 +151,102 @@ async def score_prompt(req: ScoreRequest):
         return {"scorecard": scorecard}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.post("/optimize/stream")
+async def optimize_stream(req: OptimizeRequest):
+    async def event_stream():
+        try:
+            pipeline, scorer = build_pipeline()
+
+            # Stage 1: Analyst
+            yield f"data: {json.dumps({'stage': 'analyst', 'status': 'start'})}\n\n"
+            analyst_msg = await pipeline.analyst.reply(
+                Msg(name="user", role="user", content=req.raw_input)
+            )
+            spec = analyst_msg.metadata.get("spec")
+            if not spec:
+                yield f"data: {json.dumps({'error': 'Analyst failed'})}\n\n"
+                return
+            yield f"data: {json.dumps({'stage': 'analyst', 'status': 'done'})}\n\n"
+
+            # Stage 2: Hub
+            yield f"data: {json.dumps({'stage': 'hub', 'status': 'start'})}\n\n"
+            final_prompt, iterations = await pipeline.hub_manager.run(spec)
+            for it in iterations:
+                yield f"data: {json.dumps({'stage': 'hub', 'status': 'round', 'round': it.iteration, 'score': it.score})}\n\n"
+                await asyncio.sleep(0.1)
+            yield f"data: {json.dumps({'stage': 'hub', 'status': 'done'})}\n\n"
+
+            # Stage 3: Executor
+            yield f"data: {json.dumps({'stage': 'executor', 'status': 'start'})}\n\n"
+            executor_msg = await pipeline.executor.reply(
+                Msg(
+                    name     = "pipeline",
+                    role     = "user",
+                    content  = "Execute the final prompt.",
+                    metadata = {
+                        "final_prompt": final_prompt,
+                        "sample_input": req.sample_input,
+                    },
+                )
+            )
+            executor_output = executor_msg.metadata.get("executor_output")
+            yield f"data: {json.dumps({'stage': 'executor', 'status': 'done'})}\n\n"
+
+            # Stage 4: Scorer
+            yield f"data: {json.dumps({'stage': 'scorer', 'status': 'start'})}\n\n"
+            final_score  = iterations[-1].score if iterations else 0.0
+            passed       = any(it.score >= 8.5 for it in iterations)
+            total_rounds = len(iterations)
+
+            result = OptimizationResult(
+                final_prompt    = final_prompt,
+                final_score     = final_score,
+                iterations      = iterations,
+                total_rounds    = total_rounds,
+                passed          = passed,
+                spec            = spec,
+                executor_output = executor_output,
+            )
+            scorecard = scorer.evaluate(
+                prompt_text = result.final_prompt,
+                spec_text   = result.spec.to_text() if result.spec else "",
+            )
+            yield f"data: {json.dumps({'stage': 'scorer', 'status': 'done'})}\n\n"
+
+            # Final result
+            payload = {
+                "stage": "complete",
+                "result": {
+                    "final_prompt"   : result.final_prompt,
+                    "final_score"    : result.final_score,
+                    "passed"         : result.passed,
+                    "total_rounds"   : result.total_rounds,
+                    "score_history"  : result.score_history(),
+                    "iterations"     : [
+                        {
+                            "iteration"       : it.iteration,
+                            "score"           : it.score,
+                            "critic_feedback" : it.critic_feedback,
+                            "draft"           : it.draft,
+                        }
+                        for it in result.iterations
+                    ],
+                    "executor_output": result.executor_output,
+                    "scorecard"      : scorecard,
+                }
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type = "text/event-stream",
+        headers    = {
+            "Cache-Control"     : "no-cache",
+            "X-Accel-Buffering" : "no",
+        }
+    )

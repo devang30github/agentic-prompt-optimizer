@@ -12,12 +12,8 @@ async function runPipeline() {
   resetStages();
   hideResults();
 
-  // Simulate stage progression while waiting for API
-  activateStage('stageAnalyst');
-  const stageTimer = simulateStages();
-
   try {
-    const res = await fetch(`${API}/optimize`, {
+    const res = await fetch(`${API}/optimize/stream`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
@@ -26,19 +22,31 @@ async function runPipeline() {
       }),
     });
 
-    clearInterval(stageTimer);
-
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.detail || 'Pipeline failed.');
     }
 
-    const data = await res.json();
-    markAllDone();
-    renderResults(data);
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const event = JSON.parse(line.slice(6));
+        handleEvent(event);
+      }
+    }
 
   } catch (err) {
-    clearInterval(stageTimer);
     resetStages();
     showToast(err.message);
   } finally {
@@ -46,9 +54,48 @@ async function runPipeline() {
   }
 }
 
+// ── Handle SSE events ──
+function handleEvent(event) {
+  if (event.error) {
+    showToast(event.error);
+    resetStages();
+    return;
+  }
+
+  const stageMap = {
+    analyst:  'stageAnalyst',
+    hub:      'stageHub',
+    executor: 'stageExecutor',
+    scorer:   'stageScorer',
+  };
+
+  if (event.stage && event.stage !== 'complete') {
+    const id = stageMap[event.stage];
+
+    if (event.status === 'start') {
+      activateStage(id);
+    }
+
+    if (event.status === 'round') {
+      // Update hub label to show current round + live score
+      const stageEl = document.getElementById('stageHub');
+      stageEl.querySelector('.stage-desc').textContent =
+        `Round ${event.round} — score ${event.score}/10`;
+    }
+
+    if (event.status === 'done') {
+      document.getElementById(id).className = 'stage done';
+    }
+  }
+
+  if (event.stage === 'complete') {
+    markAllDone();
+    renderResults(event.result);
+  }
+}
+
 // ── Render all results ──
 function renderResults(data) {
-  // Score header
   document.getElementById('scoreValue').textContent  = data.final_score.toFixed(1);
   document.getElementById('roundsLabel').textContent = `${data.total_rounds} round${data.total_rounds !== 1 ? 's' : ''}`;
 
@@ -56,22 +103,14 @@ function renderResults(data) {
   badge.textContent = data.passed ? 'PASSED' : 'MAX ROUNDS';
   badge.className   = 'badge' + (data.passed ? '' : ' failed');
 
-  // Score chart
   renderChart(data.score_history);
-
-  // Scorecard
   renderScorecard(data.scorecard);
 
-  // Final prompt
-  document.getElementById('finalPrompt').textContent = data.final_prompt;
-
-  // Executor output
+  document.getElementById('finalPrompt').textContent    = data.final_prompt;
   document.getElementById('executorOutput').textContent = data.executor_output || '—';
 
-  // Iterations log
   renderIterations(data.iterations);
 
-  // Show results
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('results').style.display    = 'block';
   document.getElementById('statusPill').textContent   = 'done';
@@ -90,15 +129,15 @@ function renderChart(scoreHistory) {
     data: {
       labels,
       datasets: [{
-        data:            scoreHistory,
-        borderColor:     '#a3e635',
-        backgroundColor: 'rgba(163,230,53,0.08)',
+        data:                 scoreHistory,
+        borderColor:          '#a3e635',
+        backgroundColor:      'rgba(163,230,53,0.08)',
         pointBackgroundColor: '#a3e635',
-        pointRadius:     5,
-        pointHoverRadius: 7,
-        borderWidth:     2,
-        fill:            true,
-        tension:         0.4,
+        pointRadius:          5,
+        pointHoverRadius:     7,
+        borderWidth:          2,
+        fill:                 true,
+        tension:              0.4,
       }],
     },
     options: {
@@ -112,9 +151,7 @@ function renderChart(scoreHistory) {
           borderWidth:     1,
           titleColor:      '#6b6b7a',
           bodyColor:       '#e8e8f0',
-          callbacks: {
-            label: ctx => ` Score: ${ctx.parsed.y}/10`,
-          },
+          callbacks: { label: ctx => ` Score: ${ctx.parsed.y}/10` },
         },
       },
       scales: {
@@ -131,10 +168,6 @@ function renderChart(scoreHistory) {
       },
     },
   });
-}
-
-function activateStage(id) {
-  document.getElementById(id).className = 'stage active';
 }
 
 // ── Scorecard ──
@@ -163,7 +196,6 @@ function renderScorecard(scorecard) {
       </div>`;
   });
 
-  // Animate bars after render
   requestAnimationFrame(() => {
     document.querySelectorAll('.scorecard-bar').forEach(bar => {
       bar.style.width = bar.dataset.width;
@@ -197,22 +229,17 @@ function copyPrompt() {
   });
 }
 
-// ── Stage simulation ──
-function simulateStages() {
-  const stages = ['stageAnalyst', 'stageHub', 'stageExecutor', 'stageScorer'];
-  let i = 0;
-  return setInterval(() => {
-    if (i > 0) document.getElementById(stages[i - 1]).className = 'stage done';
-    if (i < stages.length) {
-      document.getElementById(stages[i]).className = 'stage active';
-      i++;
-    }
-  }, 4000);
+// ── Stage helpers ──
+function activateStage(id) {
+  document.getElementById(id).className = 'stage active';
 }
 
 function resetStages() {
   ['stageAnalyst','stageHub','stageExecutor','stageScorer'].forEach(id => {
     document.getElementById(id).className = 'stage';
+    if (id === 'stageHub') {
+      document.getElementById(id).querySelector('.stage-desc').textContent = 'Iterative refinement';
+    }
   });
 }
 
