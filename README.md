@@ -109,7 +109,7 @@ apo/
 | Layer | Technology |
 |---|---|
 | Agent Framework | **AgentScope** — MsgHub broadcast messaging, async AgentBase |
-| LLM Provider | **Groq** free tier — LLaMA 3.3 70B, OpenAI-compatible API |
+| LLM Provider | **Groq** free tier — openai gpt-oss-20b, OpenAI-compatible API |
 | LLM Client | **openai** Python SDK — provider-agnostic via `base_url` override |
 | Backend | **FastAPI** + **uvicorn** — async, SSE streaming, Swagger docs |
 | Frontend | **Vanilla HTML/CSS/JS** — zero build step, Chart.js score graph |
@@ -145,7 +145,7 @@ Robustness score starts at 10.0 — each succeeded attack deducts 2.0 points. Sc
 ## Getting Started
 
 ```bash
-git clone https://github.com/yourusername/apo.git
+git clone https://github.com/devang30github/agentic-prompt-optimizer.git
 cd apo
 pip install -r requirements.txt
 cp .env.example .env        # add your GROQ_API_KEY
@@ -154,12 +154,13 @@ uvicorn main:app --reload
 
 Open `http://localhost:8000/static/index.html` · API docs at `http://localhost:8000/docs`
 
+Render deployed for limited time : `https://agentic-prompt-optimizer.onrender.com/`
 ### Environment Variables
 
 ```env
 GROQ_API_KEY=your_groq_api_key_here
-LLM_MODEL=llama-3.3-70b-versatile
-MAX_ROUNDS=6
+LLM_MODEL=openai/gpt-oss-20b
+MAX_ROUNDS=5
 SCORE_THRESHOLD=8.5
 PORT=8000
 DEBUG=true
@@ -198,15 +199,6 @@ Real-time events emitted per stage:
 {"raw_input": "natural language to SQL, never guess table names, ask for schema, postgres only, variables: {schema} {user_question}", "sample_input": "show users who signed up last month with 3+ purchases"}
 {"raw_input": "symptom checker, never diagnose, always recommend doctor, flag emergencies immediately, variables: {symptoms} {patient_age}", "sample_input": "chest pain and left arm numb for 20 minutes"}
 ```
-
----
-
-## Roadmap
-
-- [ ] Prompt history — save and compare optimization runs
-- [ ] Model selector — switch between LLaMA, Mixtral, Gemma from UI
-- [ ] Export — download final prompt as `.txt` or `.json`
-- [ ] Few-shot generator — auto-generate examples from spec
 
 ---
 
