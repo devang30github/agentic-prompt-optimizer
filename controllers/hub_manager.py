@@ -23,6 +23,55 @@ class HubManager:
     def __init__(self, architect: ArchitectAgent, critic: CriticAgent):
         self.architect = architect
         self.critic    = critic
+        
+    async def harden(
+        self,
+        spec: PromptSpec,
+        current_prompt: str,
+        vulnerabilities: list[str],
+        patch_recommendations: list[str],
+    ) -> tuple[str, IterationLog]:
+        """
+        Runs one targeted hardening round after Red Teamer finds vulnerabilities.
+        Feeds vulnerabilities + patch recommendations directly to the Architect.
+        """
+        logger.info(f"Hub hardening round | vulnerabilities: {vulnerabilities}")
+
+        patches_text = "\n".join(f"  - {p}" for p in patch_recommendations)
+        vulns_text   = ", ".join(vulnerabilities)
+
+        hardening_input = (
+            f"The following prompt has been red team tested and found VULNERABLE.\n\n"
+            f"=== Original Specification ===\n{spec.to_text()}\n\n"
+            f"=== Current Prompt (needs hardening) ===\n{current_prompt}\n\n"
+            f"=== Vulnerabilities Found ===\n{vulns_text}\n\n"
+            f"=== Required Fixes ===\n{patches_text}\n\n"
+            f"Rewrite the prompt to patch ALL vulnerabilities while keeping "
+            f"the original functionality intact. Add explicit rules that prevent "
+            f"prompt injection, role confusion, and the other attack vectors found."
+        )
+
+        async with MsgHub(participants=[self.architect, self.critic]):
+            architect_msg = await self.architect.reply(
+                Msg(name="pipeline", role="user", content=hardening_input)
+            )
+            hardened_prompt = architect_msg.content
+
+            critic_msg = await self.critic.reply(
+                Msg(name="pipeline", role="user", content=hardened_prompt)
+            )
+            score   = critic_msg.metadata.get("score", 0.0)
+            feedback = critic_msg.content
+
+        log = IterationLog(
+            iteration       = 999,  # sentinel value — marks hardening round
+            draft           = hardened_prompt,
+            critic_feedback = f"[HARDENING ROUND]\n{feedback}",
+            score           = score,
+        )
+
+        logger.info(f"Hardening round complete | score: {score}")
+        return hardened_prompt, log
 
     async def run(self, spec: PromptSpec) -> tuple[str, list[IterationLog]]:
         iterations   : list[IterationLog] = []

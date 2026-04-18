@@ -27,6 +27,7 @@ CRITICAL RULES:
   - NEVER write a greeting, a user message, or a first-person response ("I am here to help...")
   - NEVER include meta-commentary like "Here is the prompt:" or "This prompt does..."
   - The output IS the system prompt. It must be copy-pasteable directly into an LLM system field.
+  - Always include explicit rules against prompt injection, role confusion, and off-topic inputs.
 
 Apply the best prompting technique for the task:
   - Chain-of-Thought (CoT) for reasoning tasks

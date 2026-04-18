@@ -46,6 +46,7 @@ class OptimizationResult:
     passed:          bool                    = False
     spec:            Optional[object]        = None   # PromptSpec — avoid circular import
     executor_output: Optional[str]           = None
+    red_team_reports : list[dict]              = field(default_factory=list)
     created_at:      str                     = field(
                          default_factory=lambda: datetime.utcnow().isoformat()
                      )

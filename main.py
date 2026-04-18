@@ -17,7 +17,7 @@ import agentscope
 
 from config import settings, setup_logging
 from services import LLMClient, Scorer
-from agents import AnalystAgent, ArchitectAgent, CriticAgent, ExecutorAgent
+from agents import AnalystAgent, ArchitectAgent, CriticAgent, ExecutorAgent, RedTeamerAgent
 from controllers.hub_manager import HubManager
 from controllers import Pipeline
 from fastapi.responses import FileResponse
@@ -68,8 +68,9 @@ def build_pipeline() -> tuple[Pipeline, Scorer]:
     architect = ArchitectAgent(llm)
     critic    = CriticAgent(llm)
     executor  = ExecutorAgent(llm)
+    red_teamer  = RedTeamerAgent(llm)
     hub       = HubManager(architect, critic)
-    pipeline  = Pipeline(analyst, hub, executor)
+    pipeline  = Pipeline(analyst, hub, executor , red_teamer)
     scorer    = Scorer(llm)
     return pipeline, scorer
 
@@ -101,6 +102,7 @@ class OptimizeResponse(BaseModel):
     iterations      : list[IterationOut]
     executor_output : Optional[str]
     scorecard       : dict
+    red_team_reports : list[dict]
 
 
 # ------------------------------------------------------------------
@@ -138,6 +140,7 @@ async def optimize(req: OptimizeRequest):
             ],
             executor_output = result.executor_output,
             scorecard       = scorecard,
+            red_team_reports = result.red_team_reports,
         )
 
     except ValueError as e:
@@ -154,8 +157,150 @@ async def score_prompt(req: ScoreRequest):
         return {"scorecard": scorecard}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
 
+@app.post("/optimize/stream")
+async def optimize_stream(req: OptimizeRequest):
+    async def event_stream():
+        try:
+            pipeline, scorer = build_pipeline()
+
+            # Stage 1: Analyst
+            yield f"data: {json.dumps({'stage': 'analyst', 'status': 'start'})}\n\n"
+            analyst_msg = await pipeline.analyst.reply(
+                Msg(name="user", role="user", content=req.raw_input)
+            )
+            spec = analyst_msg.metadata.get("spec")
+            if not spec:
+                yield f"data: {json.dumps({'error': 'Analyst failed'})}\n\n"
+                return
+            yield f"data: {json.dumps({'stage': 'analyst', 'status': 'done'})}\n\n"
+
+            # Stage 2: Hub
+            yield f"data: {json.dumps({'stage': 'hub', 'status': 'start'})}\n\n"
+            final_prompt, iterations = await pipeline.hub_manager.run(spec)
+            for it in iterations:
+                yield f"data: {json.dumps({'stage': 'hub', 'status': 'round', 'round': it.iteration, 'score': it.score})}\n\n"
+                await asyncio.sleep(0.1)
+            yield f"data: {json.dumps({'stage': 'hub', 'status': 'done'})}\n\n"
+
+            # Stage 3: Red Teamer
+            yield f"data: {json.dumps({'stage': 'red_teamer', 'status': 'start'})}\n\n"
+            red_team_reports = []
+
+            for cycle in range(1, 3):  # max 2 cycles
+                rt_msg = await pipeline.red_teamer.reply(
+                    Msg(
+                        name     = "pipeline",
+                        role     = "user",
+                        content  = "Attack the prompt.",
+                        metadata = {
+                            "final_prompt": final_prompt,
+                            "spec_text"   : spec.to_text(),
+                        },
+                    )
+                )
+                report           = rt_msg.metadata.get("report", {})
+                hardening_needed = rt_msg.metadata.get("hardening_needed", False)
+                vulnerabilities  = rt_msg.metadata.get("vulnerabilities", [])
+                patches          = rt_msg.metadata.get("patch_recommendations", [])
+                robustness_score = rt_msg.metadata.get("robustness_score", 10.0)
+                red_team_reports.append(report)
+
+                yield f"data: {json.dumps({'stage': 'red_teamer', 'status': 'cycle', 'cycle': cycle, 'robustness_score': robustness_score, 'hardening_needed': hardening_needed})}\n\n"
+
+                if hardening_needed and cycle < 2:
+                    yield f"data: {json.dumps({'stage': 'red_teamer', 'status': 'hardening', 'vulnerabilities': vulnerabilities})}\n\n"
+                    final_prompt, hardening_log = await pipeline.hub_manager.harden(
+                        spec                  = spec,
+                        current_prompt        = final_prompt,
+                        vulnerabilities       = vulnerabilities,
+                        patch_recommendations = patches,
+                    )
+                    iterations.append(hardening_log)
+                else:
+                    break
+
+            yield f"data: {json.dumps({'stage': 'red_teamer', 'status': 'done'})}\n\n"
+
+            # Stage 4: Executor
+            yield f"data: {json.dumps({'stage': 'executor', 'status': 'start'})}\n\n"
+            executor_msg = await pipeline.executor.reply(
+                Msg(
+                    name     = "pipeline",
+                    role     = "user",
+                    content  = "Execute the final prompt.",
+                    metadata = {
+                        "final_prompt": final_prompt,
+                        "sample_input": req.sample_input,
+                    },
+                )
+            )
+            executor_output = executor_msg.metadata.get("executor_output")
+            yield f"data: {json.dumps({'stage': 'executor', 'status': 'done'})}\n\n"
+
+            # Stage 5: Scorer
+            yield f"data: {json.dumps({'stage': 'scorer', 'status': 'start'})}\n\n"
+            final_score  = next(
+                (it.score for it in reversed(iterations) if it.iteration != 999),
+                0.0
+            )
+            passed       = any(it.score >= 8.5 for it in iterations if it.iteration != 999)
+            total_rounds = len([it for it in iterations if it.iteration != 999])
+
+            result = OptimizationResult(
+                final_prompt     = final_prompt,
+                final_score      = final_score,
+                iterations       = iterations,
+                total_rounds     = total_rounds,
+                passed           = passed,
+                spec             = spec,
+                executor_output  = executor_output,
+                red_team_reports = red_team_reports,
+            )
+            scorecard = scorer.evaluate(
+                prompt_text = result.final_prompt,
+                spec_text   = result.spec.to_text() if result.spec else "",
+            )
+            yield f"data: {json.dumps({'stage': 'scorer', 'status': 'done'})}\n\n"
+
+            # Final result
+            payload = {
+                "stage": "complete",
+                "result": {
+                    "final_prompt"    : result.final_prompt,
+                    "final_score"     : result.final_score,
+                    "passed"          : result.passed,
+                    "total_rounds"    : result.total_rounds,
+                    "score_history"   : result.score_history(),
+                    "iterations"      : [
+                        {
+                            "iteration"      : it.iteration,
+                            "score"          : it.score,
+                            "critic_feedback": it.critic_feedback,
+                            "draft"          : it.draft,
+                        }
+                        for it in result.iterations
+                    ],
+                    "executor_output" : result.executor_output,
+                    "scorecard"       : scorecard,
+                    "red_team_reports": red_team_reports,
+                }
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type = "text/event-stream",
+        headers    = {
+            "Cache-Control"    : "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
+ 
+'''
 @app.post("/optimize/stream")
 async def optimize_stream(req: OptimizeRequest):
     async def event_stream():
@@ -253,3 +398,4 @@ async def optimize_stream(req: OptimizeRequest):
             "X-Accel-Buffering" : "no",
         }
     )
+'''

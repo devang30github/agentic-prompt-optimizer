@@ -65,6 +65,7 @@ function handleEvent(event) {
   const stageMap = {
     analyst:  'stageAnalyst',
     hub:      'stageHub',
+    red_teamer: 'stageRedTeamer',
     executor: 'stageExecutor',
     scorer:   'stageScorer',
   };
@@ -92,6 +93,18 @@ function handleEvent(event) {
     markAllDone();
     renderResults(event.result);
   }
+
+  if (event.status === 'cycle') {
+  const stageEl = document.getElementById('stageRedTeamer');
+  stageEl.querySelector('.stage-desc').textContent =
+    `Cycle ${event.cycle} — robustness ${event.robustness_score}/10`;
+  }
+
+  if (event.status === 'hardening') {
+    const stageEl = document.getElementById('stageRedTeamer');
+    stageEl.querySelector('.stage-desc').textContent =
+      `Hardening — fixing ${event.vulnerabilities.join(', ')}`;
+  }
 }
 
 // ── Render all results ──
@@ -110,6 +123,10 @@ function renderResults(data) {
   document.getElementById('executorOutput').textContent = data.executor_output || '—';
 
   renderIterations(data.iterations);
+
+  if (data.red_team_reports && data.red_team_reports.length > 0) {
+  renderRedTeam(data.red_team_reports);
+}
 
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('results').style.display    = 'block';
@@ -305,3 +322,69 @@ window.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('apo_onboarded', 'true');
   }
 });
+
+function renderRedTeam(reports) {
+  const existing = document.getElementById('redTeamSection');
+  if (existing) existing.remove();
+
+  const section = document.createElement('div');
+  section.id        = 'redTeamSection';
+  section.className = 'output-block';
+
+  const resultIcons = { SUCCEEDED: '✗', FAILED: '✓' };
+  const resultColors = { SUCCEEDED: '#f87171', FAILED: '#a3e635' };
+
+  let html = `<div class="panel-label" style="padding:0.85rem 1.25rem 0">red team report</div>`;
+
+  reports.forEach((report, i) => {
+    const score  = report.robustness_score ?? 10;
+    const verdict = report.verdict ?? 'ROBUST';
+    const verdictColor = verdict === 'ROBUST' ? '#a3e635' : '#fbbf24';
+
+    html += `
+      <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+          <span style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted)">
+            Cycle ${i + 1}
+          </span>
+          <span style="font-family:'Syne',sans-serif;font-weight:700;color:${verdictColor}">
+            ${verdict} — ${score}/10
+          </span>
+        </div>
+        ${(report.attacks || []).map(attack => `
+          <div style="display:flex;gap:0.75rem;align-items:flex-start;padding:0.4rem 0;border-bottom:1px solid var(--hint)">
+            <span style="color:${resultColors[attack.result]};font-size:0.9rem;flex-shrink:0">
+              ${resultIcons[attack.result]}
+            </span>
+            <div>
+              <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted)">
+                ${attack.category}
+              </div>
+              <div style="font-size:0.75rem;color:var(--text);margin-top:0.2rem">
+                ${attack.input}
+              </div>
+              <div style="font-size:0.7rem;color:var(--muted);margin-top:0.2rem;font-style:italic">
+                ${attack.reason}
+              </div>
+            </div>
+          </div>
+        `).join('')}
+        ${report.patch_recommendations?.length ? `
+          <div style="margin-top:0.75rem">
+            <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:0.4rem">
+              Patches applied
+            </div>
+            ${report.patch_recommendations.map(p => `
+              <div style="font-size:0.72rem;color:var(--blue);padding:0.2rem 0">→ ${p}</div>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>`;
+  });
+
+  section.innerHTML = html;
+
+  // Insert before iterations log
+  const iterLog = document.getElementById('iterationsLog').parentElement;
+  iterLog.parentElement.insertBefore(section, iterLog);
+}
