@@ -46,7 +46,7 @@ Most developers write LLM system prompts by hand — iterating slowly, guessing 
 │  │  └─────────────┘  feedback └──────────────┘                 │
 │  │                                     │                        │
 │  │  Loop exits when score ≥ 8.5        │                        │
-│  │  or MAX_ROUNDS (6) reached          │                        │
+│  │  or MAX_ROUNDS (5) reached          │                        │
 │  └─────────────────────────────────────┘                        │
 │         │  Final Prompt                                         │
 │         ▼                                                       │
@@ -192,8 +192,8 @@ cp .env.example .env
 
 ```env
 GROQ_API_KEY=your_groq_api_key_here
-LLM_MODEL=llama-3.3-70b-versatile
-MAX_ROUNDS=6
+LLM_MODEL=openai/gpt-oss-20b
+MAX_ROUNDS=5
 SCORE_THRESHOLD=8.5
 HOST=0.0.0.0
 PORT=8000
@@ -315,7 +315,7 @@ Standalone rubric scorer for any existing prompt.
 
 ---
 
-## Roadmap
+## Future Roadmap
 
 - [ ] **Red Teamer Agent** — adversarial testing with prompt injection attempts
 - [ ] **Prompt History** — save and compare optimization runs

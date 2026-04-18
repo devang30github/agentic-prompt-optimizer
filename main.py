@@ -21,12 +21,15 @@ from agents import AnalystAgent, ArchitectAgent, CriticAgent, ExecutorAgent
 from controllers.hub_manager import HubManager
 from controllers import Pipeline
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from fastapi.responses import StreamingResponse
 import asyncio
 import json
 from agentscope.message import Msg
 from models import OptimizationResult
+
+
 
 setup_logging()
 
