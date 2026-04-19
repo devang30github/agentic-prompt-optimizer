@@ -615,3 +615,27 @@ pre {
   box-shadow: 0 30px 60px rgba(0,0,0,0.12);
   text-align: left;
 }
+
+.github-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: all 0.2s;
+}
+
+.github-link:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(163,230,53,0.06);
+}
+
+.github-username {
+  font-family: var(--font-mono);
+}
